@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes count-pulse {
+  0% { transform: scale(1.6); opacity: 0; }
+  30% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
+}
+
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+.animate-pop-in { animation: pop-in 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
+.animate-count-pulse { animation: count-pulse 0.9s ease-out; }
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Ethiopic', sans-serif;
+  line-height: 1.5;
+}
+
+/* Hide injected "Made with Bolt" / floating badge elements */
+a[href*="bolt.new"][data-created-with],
+a[href*="bolt.new"].fixed,
+iframe[src*="bolt.new"],
+div[data-bolt-badge],
+#bolt-badge,
+[class*="bolt-badge"],
+a[href="https://bolt.new"][target="_blank"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
