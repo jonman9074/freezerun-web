@@ -22,7 +22,7 @@ interface TopBarProps {
   isAdminDashboard?: boolean;
 }
 
-export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarProps) {
+export default function TopBar({ onAdminDashboard, isAdminDashboard = false }: TopBarProps) {
   const { profile, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MenuTab>(null);
@@ -65,7 +65,12 @@ export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarPro
   const menuItems: { key: MenuTab; label: string; sub: string; show: boolean }[] = [
     { key: 'profile', label: 'መገለጫ እና አድራሻ', sub: 'Profile & Address', show: true },
     { key: 'balance', label: 'የሂሳብ ሚዛን', sub: 'Wallet Balance', show: true },
-    { key: 'admin', label: 'የአስተዳዳሪ ዳሽቦርድ', sub: 'Admin Panel', show: profile.role === 'admin' },
+    {
+      key: 'admin',
+      label: isAdminDashboard ? 'ወደ ጨዋታ ተመለስ' : 'የአስተዳዳሪ ዳሽቦርድ',
+      sub: isAdminDashboard ? 'Back to Arena' : 'Admin Panel',
+      show: profile.role === 'admin',
+    },
     { key: 'transactions', label: 'ግብይቶች', sub: 'Transactions', show: true },
     { key: 'rules', label: 'ህጎች እና መመሪያ', sub: 'Rules & Help', show: true },
   ];
@@ -153,7 +158,6 @@ export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarPro
                       </button>
                     ))}
 
-                  {/* Withdraw action strictly enforced at >= 600 ETB */}
                   <div className="mt-1 pt-1 border-t border-slate-800">
                     <button
                       type="button"
@@ -165,9 +169,7 @@ export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarPro
                       }`}
                     >
                       <div>
-                        <div className="text-xs font-bold">
-                          ገንዘብ አውጣ · Withdraw
-                        </div>
+                        <div className="text-xs font-bold">ገንዘብ አውጣ · Withdraw</div>
                         <div className="text-[11px]">
                           {canWithdraw
                             ? 'ዝግጁ ነው (ቢያንስ 600 ETB)'
@@ -196,7 +198,6 @@ export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarPro
           </div>
         </div>
 
-        {/* Notice banner when balance is under 600 ETB */}
         {withdrawNotice && (
           <div className="bg-amber-500/15 border-t border-amber-400/30 px-4 py-2.5 text-amber-200 text-xs flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
@@ -214,7 +215,6 @@ export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarPro
         )}
       </header>
 
-      {/* Info Modal for Profile / Balance / Rules */}
       {activeTab && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 text-white shadow-2xl">
