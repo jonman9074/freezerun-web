@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Snowflake, Trophy, Play } from 'lucide-react';
+import { Swords, Zap, Play, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 export interface GameDef {
-  id: 'freeze-run' | 'horse-derby';
+  id: 'freeze-duel' | 'freeze-dash';
   titleAm: string;
   titleEn: string;
   descAm: string;
@@ -14,26 +14,30 @@ export interface GameDef {
 
 export const GAMES: GameDef[] = [
   {
-    id: 'freeze-run',
-    titleAm: 'ፍሪዝ ሩጫ',
-    titleEn: 'Freeze Run',
-    descAm: 'በበረዶ መንገድ ላይ የሚሮጡ 4 ተወዳዳሪዎች። አንዱን ይምረጡ።',
-    descEn: '4 racers on an ice track. Pick your runner and sprint to the finish.',
-    accent: 'from-cyan-500/30 to-sky-600/10 border-cyan-400/30',
+    id: 'freeze-duel',
+    titleAm: '1v1 ፍሪዝ ዱኤል · የገንዘብ ውድድር',
+    titleEn: '1v1 Freeze Duel · Stake Match',
+    descAm:
+      '1ኛ ተጫዋች በብሩ ይገባል፣ 2ኛ ተጫዋች ሲመጣ ውድድሩ ይጀምራል። መጀመሪያ ቀላል ሆኖ እየከበደ ይሄዳል — ቀድሞ ወይም ሳይወድቅ ያለፈ ብሩን ይበላል!',
+    descEn:
+      '1v1 online stake match. Waits for player 2, starts when matched, ramps difficulty smoothly, and first clean finisher wins the pot.',
+    accent: 'from-cyan-500/20 to-blue-600/20 border-cyan-400/40',
   },
   {
-    id: 'horse-derby',
-    titleAm: 'የፈረስ ግልቢያ ውድድር',
-    titleEn: 'Horse Derby',
-    descAm: '4 ፈረሶች በአሸዋማ መስክ ይደወላሉ። የእርስዎ ፈረስ ማን ነው?',
-    descEn: '4 horses battle on the dirt track. Back the one you believe in.',
-    accent: 'from-amber-500/30 to-orange-600/10 border-amber-400/30',
+    id: 'freeze-dash',
+    titleAm: 'ፍሪዝ ዳሽ · ፈጣን ውድድር',
+    titleEn: 'Freeze Dash · Arcade Run',
+    descAm:
+      'ንጹሕ እና ፈጣን የመሰናክል ውድድር። ቀላል ጀምሮ ደረጃ በደረጃ እየከበደ የሚሄድ አጓጊ ጨዋታ።',
+    descEn:
+      'Clean, fast-paced obstacle & speed run that starts easy and gets progressively more challenging.',
+    accent: 'from-emerald-500/20 to-teal-600/20 border-emerald-400/40',
   },
 ];
 
 export default function HomeScreen({ onStart }: { onStart: (game: GameDef) => void }) {
   const { profile } = useAuth();
-  const [multiplier, setMultiplier] = useState(2);
+  const [multiplier, setMultiplier] = useState<number>(2);
 
   useEffect(() => {
     supabase
@@ -41,64 +45,87 @@ export default function HomeScreen({ onStart }: { onStart: (game: GameDef) => vo
       .select('value')
       .eq('key', 'payout_multiplier')
       .maybeSingle()
-      .then(({ data }) => data && setMultiplier(Number(data.value)));
+      .then(({ data }) => {
+        if (data && data.value !== undefined) {
+          const parsed = Number(data.value);
+          if (!Number.isNaN(parsed) && parsed > 0) setMultiplier(parsed);
+        }
+      });
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          ሰላም{profile?.full_name ? `, ${profile.full_name}` : ''}! 👋
-        </h1>
-        <p className="text-slate-400 mt-1">ጨዋታ ይምረጡ · Choose a game to begin</p>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            እንኳን ደህና መጡ{profile?.full_name ? `፣ ${profile.full_name}` : ''} 👋
+          </h1>
+          <p className="text-slate-400 mt-1">
+            የሚፈልጉትን ጨዋታ ይምረጡ — 1v1 ውድድር ወይም ፍሪዝ ዳሽ
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/10 border border-cyan-400/30 px-3.5 py-1.5 text-xs font-semibold text-cyan-300">
+          <ShieldCheck className="w-4 h-4" />
+          <span>ገንዘብ ማውጣት ቢያንስ 600 ETB</span>
+        </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {GAMES.map((game) => (
-          <div
-            key={game.id}
-            className={`group relative overflow-hidden rounded-3xl border bg-gradient-to-br ${game.accent} p-6 transition-transform hover:-translate-y-1 duration-200`}
-          >
-            <div className="absolute inset-0 bg-slate-950/70" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-6">
-                <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
-                    game.id === 'freeze-run'
-                      ? 'bg-gradient-to-br from-cyan-400 to-sky-600 shadow-cyan-500/30'
-                      : 'bg-gradient-to-br from-amber-400 to-orange-600 shadow-amber-500/30'
-                  }`}
-                >
-                  {game.id === 'freeze-run' ? (
-                    <Snowflake size={28} className="text-white" />
-                  ) : (
-                    <Trophy size={28} className="text-white" />
-                  )}
+      <div className="grid md:grid-cols-2 gap-6">
+        {GAMES.map((game) => {
+          const isDuel = game.id === 'freeze-duel';
+          return (
+            <div
+              key={game.id}
+              className={`group relative overflow-hidden rounded-2xl border bg-gradient-to-br ${game.accent} p-6 shadow-xl transition hover:-translate-y-0.5`}
+            >
+              <div className="absolute inset-0 bg-slate-950/75 pointer-events-none" />
+              <div className="relative flex flex-col h-full justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-5">
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${
+                        isDuel
+                          ? 'bg-gradient-to-br from-cyan-400 to-blue-600 text-slate-950'
+                          : 'bg-gradient-to-br from-emerald-400 to-teal-600 text-slate-950'
+                      }`}
+                    >
+                      {isDuel ? <Swords className="w-6 h-6" /> : <Zap className="w-6 h-6" />}
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-cyan-200 bg-white/10 border border-white/15 px-3 py-1 rounded-full">
+                      {isDuel ? `1v1 · ${multiplier.toFixed(1)}x ሽልማት` : 'ቀላል -> ከባድ'}
+                    </span>
+                  </div>
+
+                  <h2 className="text-xl font-extrabold text-white">{game.titleAm}</h2>
+                  <p className="text-xs font-semibold text-cyan-300/90 mt-0.5">{game.titleEn}</p>
+                  <p className="text-slate-300 text-sm leading-relaxed mt-3">{game.descAm}</p>
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-                  {multiplier.toFixed(1)}x
-                </span>
+
+                <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">
+                    {isDuel ? '2ኛ ተጫዋች ሲገባ ይጀምራል' : 'ደረጃ እየጨመረ ይከብዳል'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onStart(game)}
+                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-950 transition cursor-pointer ${
+                      isDuel
+                        ? 'bg-gradient-to-r from-cyan-400 to-sky-400 hover:brightness-110'
+                        : 'bg-gradient-to-r from-emerald-400 to-teal-400 hover:brightness-110'
+                    }`}
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>ጀምር · Start</span>
+                  </button>
+                </div>
               </div>
-
-              <h2 className="text-xl font-bold text-white">{game.titleAm}</h2>
-              <p className="text-cyan-300/90 text-sm font-semibold mb-2">{game.titleEn}</p>
-              <p className="text-sm text-slate-400 mb-6 leading-relaxed">{game.descAm}</p>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed -mt-4">{game.descEn}</p>
-
-              <button
-                onClick={() => onStart(game)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-400 hover:to-sky-400 hover:shadow-cyan-400/40 active:scale-95"
-              >
-                <Play size={18} fill="currentColor" />
-                ጀምር · Start
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <p className="text-center text-xs text-slate-600 mt-10">
-        18+ · በሀብታትዎ ተጠያቂነት ይጫወቱ · Play responsibly
+      <p className="text-center text-xs text-slate-500 mt-10">
+        18+ · በኃላፊነት ይጫወቱ · Play responsibly
       </p>
     </div>
   );
