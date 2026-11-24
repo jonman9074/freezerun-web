@@ -59,15 +59,12 @@ class RaceAudioEngine {
     return this.muted;
   }
 
-  // Speaks strictly in Amharic (am-ET). Never falls back to English speech.
   public speakAmharic(text: string, rate = 1.0) {
     if (this.muted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       const voices = window.speechSynthesis.getVoices();
       const amVoice = voices.find((v) => v.lang.toLowerCase().startsWith('am'));
-      if (!amVoice) {
-        return;
-      }
+      if (!amVoice) return;
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'am-ET';
@@ -132,7 +129,7 @@ class RaceAudioEngine {
     if (this.muted) return;
     this.hoofTimer -= dt;
     if (this.hoofTimer > 0) return;
-    this.hoofTimer = mode === 'derby' ? 0.14 : 0.2;
+    this.hoofTimer = mode === 'derby' ? 0.13 : 0.18;
 
     const ctx = this.ensureCtx();
     if (!ctx) return;
@@ -140,11 +137,11 @@ class RaceAudioEngine {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = mode === 'derby' ? 'triangle' : 'sine';
-    const baseFreq = mode === 'derby' ? 120 + Math.random() * 35 : 160 + Math.random() * 25;
+    const baseFreq = mode === 'derby' ? 125 + Math.random() * 35 : 165 + Math.random() * 25;
     osc.frequency.setValueAtTime(baseFreq, now);
     osc.frequency.exponentialRampToValueAtTime(42, now + 0.07);
 
-    gain.gain.setValueAtTime(mode === 'derby' ? 0.09 : 0.05, now);
+    gain.gain.setValueAtTime(mode === 'derby' ? 0.1 : 0.06, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
 
     osc.connect(gain);
@@ -187,15 +184,15 @@ function laneOffset(i: number) {
   return -1.5 * LANE_W + i * LANE_W;
 }
 
-// point on the oval for lane offset `off` at lap fraction t (0..1)
+// Forward direction along oval for lane offset `off` at lap fraction t (0..1)
 function pathPoint(t: number, off: number) {
   const th = t * Math.PI * 2;
-  return {
-    x: (RX + off) * Math.sin(th),
-    z: (RZ + off) * Math.cos(th),
-    tx: (RX + off) * Math.cos(th),
-    tz: -(RZ + off) * Math.sin(th),
-  };
+  const x = (RX + off) * Math.sin(th);
+  const z = (RZ + off) * Math.cos(th);
+  // Derivative with respect to th gives forward movement vector (dx/dth, dz/dth)
+  const dx = (RX + off) * Math.cos(th);
+  const dz = -(RZ + off) * Math.sin(th);
+  return { x, z, tx: dx, tz: dz };
 }
 
 function hex(color: number) {
@@ -291,7 +288,7 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
     const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.34, 6, 12), skin);
     shin.position.y = -0.24;
     const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.3), shoeMat);
-    shoe.position.set(0, -0.5, -0.06);
+    shoe.position.set(0, -0.5, 0.06);
     knee.add(shin, shoe);
     hip.add(thigh, knee);
     rig.add(hip);
@@ -301,7 +298,7 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
 
   const torso = new THREE.Mesh(
     new THREE.BoxGeometry(0.58, 0.74, 0.32),
-    [jerseySide, jerseySide, jerseySide, jerseySide, jerseyBack, jerseyFront]
+    [jerseySide, jerseySide, jerseySide, jerseySide, jerseyFront, jerseyBack]
   );
   torso.position.y = 1.66;
   torso.castShadow = true;
@@ -357,16 +354,16 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
 function poseRunnerSprint(parts: RunnerRig, phase: number) {
   const s = Math.sin(phase);
   const c = Math.sin(phase + Math.PI);
-  parts.hipL.rotation.x = s * 1.25 - 0.3;
-  parts.hipR.rotation.x = c * 1.25 - 0.3;
-  parts.kneeL.rotation.x = Math.max(0, -s) * 1.95 + 0.15;
-  parts.kneeR.rotation.x = Math.max(0, -c) * 1.95 + 0.15;
-  parts.shL.rotation.x = c * 1.15;
-  parts.shR.rotation.x = s * 1.15;
+  parts.hipL.rotation.x = s * 1.3 - 0.25;
+  parts.hipR.rotation.x = c * 1.3 - 0.25;
+  parts.kneeL.rotation.x = Math.max(0, -s) * 2.0 + 0.15;
+  parts.kneeR.rotation.x = Math.max(0, -c) * 2.0 + 0.15;
+  parts.shL.rotation.x = c * 1.2;
+  parts.shR.rotation.x = s * 1.2;
   parts.elL.rotation.x = -1.35 - Math.max(0, c) * 0.35;
   parts.elR.rotation.x = -1.35 - Math.max(0, s) * 0.35;
-  parts.rig.rotation.x = 0.26;
-  parts.rig.position.y = Math.abs(Math.sin(phase)) * 0.12;
+  parts.rig.rotation.x = 0.22;
+  parts.rig.position.y = Math.abs(Math.sin(phase)) * 0.14;
 }
 
 function poseRunnerIdle(parts: RunnerRig) {
@@ -403,9 +400,10 @@ function createHorseGallopRig(model: THREE.Object3D): HorseGallopRig {
       n.includes('limb') ||
       n.includes('front') ||
       n.includes('hind') ||
-      n.includes('rear')
+      n.includes('rear') ||
+      n.includes('limb')
     ) {
-      const isBack = n.includes('back') || n.includes('hind') || n.includes('rear') || obj.position.z > 0;
+      const isBack = n.includes('back') || n.includes('hind') || n.includes('rear') || obj.position.z < 0;
       const isRight = n.includes('right') || n.includes('_r') || obj.position.x > 0;
       legNodes.push({
         obj,
@@ -440,23 +438,23 @@ function applyHorseGallop(hRig: HorseGallopRig, time: number, racing: boolean) {
     return;
   }
 
-  const cycle = time * 14.0;
-  const bounce = Math.abs(Math.sin(cycle)) * 0.22;
+  const cycle = time * 15.0;
+  const bounce = Math.abs(Math.sin(cycle)) * 0.25;
   hRig.rig.position.y = bounce;
-  hRig.rig.rotation.x = Math.sin(cycle) * 0.14;
-  hRig.rig.rotation.z = Math.cos(cycle * 0.5) * 0.06;
+  hRig.rig.rotation.x = Math.sin(cycle) * 0.16;
+  hRig.rig.rotation.z = Math.cos(cycle * 0.5) * 0.07;
 
   hRig.legNodes.forEach((l) => {
     const phase = cycle + l.end * 1.25 + l.side * 0.5;
-    l.obj.rotation.x = l.baseRotX + Math.sin(phase) * 0.72;
+    l.obj.rotation.x = l.baseRotX + Math.sin(phase) * 0.85;
   });
 
   hRig.headNodes.forEach((h) => {
-    h.obj.rotation.x = h.baseRotX + Math.sin(cycle + 0.8) * 0.24;
+    h.obj.rotation.x = h.baseRotX + Math.sin(cycle + 0.8) * 0.28;
   });
 
   hRig.jockeyNodes.forEach((j) => {
-    j.obj.rotation.x = j.baseRotX + Math.cos(cycle) * 0.18;
+    j.obj.rotation.x = j.baseRotX + Math.cos(cycle) * 0.2;
   });
 }
 
@@ -514,7 +512,7 @@ function addGrandstands(scene: THREE.Scene, count: number, isIce: boolean) {
     stand.add(roof);
 
     stand.position.set(p.x, 0, p.z);
-    stand.rotation.y = Math.atan2(-tan.z, tan.x);
+    stand.rotation.y = Math.atan2(tan.x, tan.z);
     scene.add(stand);
   }
 }
@@ -733,7 +731,6 @@ export function initRaceScene(
     template.position.x -= center.x;
     template.position.z -= center.z;
     template.position.y -= box2.min.y;
-    // Face forward along the track direction (-Z in local space matches atan2(-p.tx, -p.tz))
     template.rotation.y = 0;
 
     const clips = gltf.animations ?? [];
@@ -758,8 +755,7 @@ export function initRaceScene(
           roughness: 0.55,
         })
       );
-      bibF.position.set(0, chestY, -d * 0.16);
-      bibF.rotation.y = Math.PI;
+      bibF.position.set(0, chestY, d * 0.18);
 
       const bibB = new THREE.Mesh(
         new THREE.PlaneGeometry(bibSize, bibSize),
@@ -768,7 +764,8 @@ export function initRaceScene(
           roughness: 0.55,
         })
       );
-      bibB.position.set(0, chestY, d * 0.18);
+      bibB.position.set(0, chestY, -d * 0.16);
+      bibB.rotation.y = Math.PI;
       clone.add(bibF, bibB);
 
       const { rig } = addRacerRoot(r, i, clone);
@@ -778,7 +775,7 @@ export function initRaceScene(
       if (clips.length > 0) {
         const mixer = new THREE.AnimationMixer(clone);
         const action = mixer.clipAction(clips[0]);
-        action.timeScale = 1.6;
+        action.timeScale = 1.65;
         action.play();
         mixers.push(mixer);
       }
@@ -903,7 +900,8 @@ export function initRaceScene(
     const off = laneOffset(i);
     const p = pathPoint(frac, off);
     root.position.set(p.x, 0, p.z);
-    root.rotation.y = Math.atan2(-p.tx, -p.tz);
+    // Orient local +Z along forward tangent (p.tx, p.tz)
+    root.rotation.y = Math.atan2(p.tx, p.tz);
   }
 
   function followLeader(frac: number) {
@@ -946,7 +944,7 @@ export function initRaceScene(
 
     runnerRigs.forEach((parts, i) => {
       if (!parts) return;
-      if (racing) poseRunnerSprint(parts, t * 14 + i * 2.1);
+      if (racing) poseRunnerSprint(parts, t * 15 + i * 2.1);
       else poseRunnerIdle(parts);
     });
 
@@ -957,8 +955,8 @@ export function initRaceScene(
       } else {
         const rig = root.children[0];
         if (rig?.userData.horse) {
-          rig.position.y = racing ? Math.abs(Math.sin(t * 12 + i * 1.9)) * 0.18 : 0;
-          rig.rotation.z = racing ? Math.sin(t * 12 + i * 1.9) * 0.06 : 0;
+          rig.position.y = racing ? Math.abs(Math.sin(t * 14 + i * 1.9)) * 0.22 : 0;
+          rig.rotation.z = racing ? Math.sin(t * 14 + i * 1.9) * 0.07 : 0;
         }
       }
       if (racing && i % 2 === 0) {
