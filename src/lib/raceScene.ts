@@ -26,7 +26,7 @@ const DUST_N = 200;
 const DERBY_URL =
   'https://raw.githubusercontent.com/jonman9074/freezerun-assets/main/red_horse_rider.glb';
 
-// ---------- Amharic Announcer & Race Audio Engine ----------
+// ---------- Amharic-Only Announcer & Race Audio Engine ----------
 class RaceAudioEngine {
   private ctx: AudioContext | null = null;
   private muted = false;
@@ -35,7 +35,9 @@ class RaceAudioEngine {
   private ensureCtx(): AudioContext | null {
     if (this.muted) return null;
     if (!this.ctx && typeof window !== 'undefined') {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }
@@ -57,17 +59,21 @@ class RaceAudioEngine {
     return this.muted;
   }
 
-  public speakAmharic(text: string, rate = 1.02) {
+  // Speaks strictly in Amharic (am-ET). Never falls back to English speech.
+  public speakAmharic(text: string, rate = 1.0) {
     if (this.muted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
+      const voices = window.speechSynthesis.getVoices();
+      const amVoice = voices.find((v) => v.lang.toLowerCase().startsWith('am'));
+      if (!amVoice) {
+        return;
+      }
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'am-ET';
+      utter.voice = amVoice;
       utter.rate = rate;
-      utter.pitch = 1.05;
-      const voices = window.speechSynthesis.getVoices();
-      const amVoice = voices.find((v) => v.lang.toLowerCase().startsWith('am'));
-      if (amVoice) utter.voice = amVoice;
+      utter.pitch = 1.02;
       window.speechSynthesis.speak(utter);
     } catch {
       // ignore if speech synthesis is unavailable
@@ -79,7 +85,6 @@ class RaceAudioEngine {
     if (!ctx) return;
     const now = ctx.currentTime;
 
-    // Starting horn / whistle burst
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sawtooth';
@@ -127,7 +132,7 @@ class RaceAudioEngine {
     if (this.muted) return;
     this.hoofTimer -= dt;
     if (this.hoofTimer > 0) return;
-    this.hoofTimer = mode === 'derby' ? 0.16 : 0.22;
+    this.hoofTimer = mode === 'derby' ? 0.14 : 0.2;
 
     const ctx = this.ensureCtx();
     if (!ctx) return;
@@ -135,7 +140,7 @@ class RaceAudioEngine {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = mode === 'derby' ? 'triangle' : 'sine';
-    const baseFreq = mode === 'derby' ? 115 + Math.random() * 35 : 155 + Math.random() * 25;
+    const baseFreq = mode === 'derby' ? 120 + Math.random() * 35 : 160 + Math.random() * 25;
     osc.frequency.setValueAtTime(baseFreq, now);
     osc.frequency.exponentialRampToValueAtTime(42, now + 0.07);
 
@@ -150,20 +155,20 @@ class RaceAudioEngine {
 
   public announceReady(mode: 'run' | 'derby') {
     const sportAm = mode === 'derby' ? 'የፈረስ ግልቢያ ውድድር' : 'የፍሪዝ ሩጫ ውድድር';
-    this.speakAmharic(`${sportAm} ሊጀምር ነው! ተወዳዳሪዎች ተዘጋጁ!`);
+    this.speakAmharic(`${sportAm} ሊጀምር ነው። ተወዳዳሪዎች ተዘጋጁ።`);
   }
 
   public announceStart() {
     this.playStartSignal();
-    this.speakAmharic('ውድድሩ ተጀምሯል! ሩጫ ቀጥሏል!');
+    this.speakAmharic('ውድድሩ ተጀምሯል። ሩጫ ቀጥሏል።');
   }
 
   public announceFinish(winner?: Racer) {
     this.playCrowdCheer(0.16, 2.2);
     if (winner) {
-      this.speakAmharic(`ውድድሩ ተጠናቋል! ቁጥር ${winner.num} ${winner.nameAm} አሸንፏል!`);
+      this.speakAmharic(`ውድድሩ ተጠናቋል። ቁጥር ${winner.num} ${winner.nameAm} አሸንፏል።`);
     } else {
-      this.speakAmharic('ውድድሩ ተጠናቋል!');
+      this.speakAmharic('ውድድሩ ተጠናቋል።');
     }
   }
 
@@ -197,7 +202,6 @@ function hex(color: number) {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
-// crisp jersey number texture; mirror=true flips horizontally for rear/reverse viewing
 function jerseyTexture(num: number, color: number, mirror: boolean): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -207,13 +211,11 @@ function jerseyTexture(num: number, color: number, mirror: boolean): THREE.Canva
   ctx.fillStyle = hex(color);
   ctx.fillRect(0, 0, 256, 256);
 
-  // subtle athletic stripes
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   for (let y = 18; y < 256; y += 44) {
     ctx.fillRect(0, y, 256, 10);
   }
 
-  // white bib panel behind number for high contrast
   ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
   ctx.beginPath();
   ctx.roundRect(38, 42, 180, 172, 22);
@@ -265,8 +267,6 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
     roughness: 0.68,
   });
   const jerseySide = new THREE.MeshStandardMaterial({ color: r.color, roughness: 0.55 });
-  // In pathPoint, tangent points along (-tx, -tz) when rotated by atan2(-p.tx, -p.tz).
-  // Follow camera sits behind (-tan), looking toward (+tan) along the racer's forward axis.
   const jerseyFront = new THREE.MeshStandardMaterial({
     map: jerseyTexture(r.num, r.color, false),
     roughness: 0.55,
@@ -278,7 +278,6 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
   const shortsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
   const shoeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.45 });
 
-  // legs: hip pivot -> thigh, knee pivot -> shin + shoe
   const hips: Record<string, THREE.Group> = {};
   const knees: Record<string, THREE.Group> = {};
   (['L', 'R'] as const).forEach((side, si) => {
@@ -300,7 +299,6 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
     knees[`knee${side}`] = knee;
   });
 
-  // torso: [+X, -X, +Y, -Y, +Z, -Z]
   const torso = new THREE.Mesh(
     new THREE.BoxGeometry(0.58, 0.74, 0.32),
     [jerseySide, jerseySide, jerseySide, jerseySide, jerseyBack, jerseyFront]
@@ -313,7 +311,6 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
   shorts.position.y = 1.14;
   rig.add(shorts);
 
-  // head + hair
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 20), skin);
   head.position.y = 2.24;
   rig.add(head);
@@ -324,7 +321,6 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
   hair.position.y = 2.26;
   rig.add(hair);
 
-  // arms: shoulder pivot -> upper arm, elbow pivot -> forearm
   const shoulders: Record<string, THREE.Group> = {};
   const elbows: Record<string, THREE.Group> = {};
   (['L', 'R'] as const).forEach((side, si) => {
@@ -361,16 +357,16 @@ function buildRunner(r: Racer, i: number): { root: THREE.Group; parts: RunnerRig
 function poseRunnerSprint(parts: RunnerRig, phase: number) {
   const s = Math.sin(phase);
   const c = Math.sin(phase + Math.PI);
-  parts.hipL.rotation.x = s * 1.15 - 0.28;
-  parts.hipR.rotation.x = c * 1.15 - 0.28;
-  parts.kneeL.rotation.x = Math.max(0, -s) * 1.85 + 0.15;
-  parts.kneeR.rotation.x = Math.max(0, -c) * 1.85 + 0.15;
-  parts.shL.rotation.x = c * 1.05;
-  parts.shR.rotation.x = s * 1.05;
-  parts.elL.rotation.x = -1.3 - Math.max(0, c) * 0.35;
-  parts.elR.rotation.x = -1.3 - Math.max(0, s) * 0.35;
-  parts.rig.rotation.x = 0.24;
-  parts.rig.position.y = Math.abs(Math.sin(phase)) * 0.09;
+  parts.hipL.rotation.x = s * 1.25 - 0.3;
+  parts.hipR.rotation.x = c * 1.25 - 0.3;
+  parts.kneeL.rotation.x = Math.max(0, -s) * 1.95 + 0.15;
+  parts.kneeR.rotation.x = Math.max(0, -c) * 1.95 + 0.15;
+  parts.shL.rotation.x = c * 1.15;
+  parts.shR.rotation.x = s * 1.15;
+  parts.elL.rotation.x = -1.35 - Math.max(0, c) * 0.35;
+  parts.elR.rotation.x = -1.35 - Math.max(0, s) * 0.35;
+  parts.rig.rotation.x = 0.26;
+  parts.rig.position.y = Math.abs(Math.sin(phase)) * 0.12;
 }
 
 function poseRunnerIdle(parts: RunnerRig) {
@@ -383,20 +379,32 @@ function poseRunnerIdle(parts: RunnerRig) {
   parts.rig.position.y = 0;
 }
 
-// ---------- Horse Gallop Helper (works even on GLBs with static/unlabeled bones) ----------
+// ---------- Horse + Jockey Gallop Rig ----------
 interface HorseGallopRig {
   rig: THREE.Object3D;
   legNodes: { obj: THREE.Object3D; baseRotX: number; side: number; end: number }[];
   headNodes: { obj: THREE.Object3D; baseRotX: number }[];
+  jockeyNodes: { obj: THREE.Object3D; baseRotX: number }[];
 }
 
 function createHorseGallopRig(model: THREE.Object3D): HorseGallopRig {
   const legNodes: { obj: THREE.Object3D; baseRotX: number; side: number; end: number }[] = [];
   const headNodes: { obj: THREE.Object3D; baseRotX: number }[] = [];
+  const jockeyNodes: { obj: THREE.Object3D; baseRotX: number }[] = [];
 
   model.traverse((obj) => {
     const n = obj.name.toLowerCase();
-    if (n.includes('leg') || n.includes('foot') || n.includes('hoof') || n.includes('thigh') || n.includes('shin')) {
+    if (
+      n.includes('leg') ||
+      n.includes('foot') ||
+      n.includes('hoof') ||
+      n.includes('thigh') ||
+      n.includes('shin') ||
+      n.includes('limb') ||
+      n.includes('front') ||
+      n.includes('hind') ||
+      n.includes('rear')
+    ) {
       const isBack = n.includes('back') || n.includes('hind') || n.includes('rear') || obj.position.z > 0;
       const isRight = n.includes('right') || n.includes('_r') || obj.position.x > 0;
       legNodes.push({
@@ -407,10 +415,12 @@ function createHorseGallopRig(model: THREE.Object3D): HorseGallopRig {
       });
     } else if (n.includes('head') || n.includes('neck')) {
       headNodes.push({ obj, baseRotX: obj.rotation.x });
+    } else if (n.includes('jockey') || n.includes('rider') || n.includes('torso') || n.includes('spine')) {
+      jockeyNodes.push({ obj, baseRotX: obj.rotation.x });
     }
   });
 
-  return { rig: model, legNodes, headNodes };
+  return { rig: model, legNodes, headNodes, jockeyNodes };
 }
 
 function applyHorseGallop(hRig: HorseGallopRig, time: number, racing: boolean) {
@@ -424,22 +434,29 @@ function applyHorseGallop(hRig: HorseGallopRig, time: number, racing: boolean) {
     hRig.headNodes.forEach((h) => {
       h.obj.rotation.x = h.baseRotX;
     });
+    hRig.jockeyNodes.forEach((j) => {
+      j.obj.rotation.x = j.baseRotX;
+    });
     return;
   }
 
-  const cycle = time * 12.5;
-  const bounce = Math.abs(Math.sin(cycle)) * 0.14;
+  const cycle = time * 14.0;
+  const bounce = Math.abs(Math.sin(cycle)) * 0.22;
   hRig.rig.position.y = bounce;
-  hRig.rig.rotation.x = Math.cos(cycle) * 0.08;
-  hRig.rig.rotation.z = Math.sin(cycle * 0.5) * 0.04;
+  hRig.rig.rotation.x = Math.sin(cycle) * 0.14;
+  hRig.rig.rotation.z = Math.cos(cycle * 0.5) * 0.06;
 
   hRig.legNodes.forEach((l) => {
-    const phase = cycle + l.end * 1.1 + l.side * 0.45;
-    l.obj.rotation.x = l.baseRotX + Math.sin(phase) * 0.55;
+    const phase = cycle + l.end * 1.25 + l.side * 0.5;
+    l.obj.rotation.x = l.baseRotX + Math.sin(phase) * 0.72;
   });
 
   hRig.headNodes.forEach((h) => {
-    h.obj.rotation.x = h.baseRotX + Math.sin(cycle + 0.8) * 0.16;
+    h.obj.rotation.x = h.baseRotX + Math.sin(cycle + 0.8) * 0.24;
+  });
+
+  hRig.jockeyNodes.forEach((j) => {
+    j.obj.rotation.x = j.baseRotX + Math.cos(cycle) * 0.18;
   });
 }
 
@@ -473,7 +490,6 @@ function addGrandstands(scene: THREE.Scene, count: number, isIce: boolean) {
     const tan = new THREE.Vector3(p.tx, 0, p.tz).normalize();
     const stand = new THREE.Group();
 
-    // 3 stepped stadium tiers
     for (let tier = 0; tier < 3; tier++) {
       const step = new THREE.Mesh(new THREE.BoxGeometry(14.5, 1.3, 2.1), tierMat);
       step.position.set(0, 0.65 + tier * 1.25, 1.8 - tier * 1.55);
@@ -481,7 +497,6 @@ function addGrandstands(scene: THREE.Scene, count: number, isIce: boolean) {
       seatRow.position.set(0, 1.45 + tier * 1.25, 1.8 - tier * 1.55);
       stand.add(step, seatRow);
 
-      // spectator figures on each tier
       for (let s = -6; s <= 6; s += 2) {
         const specMat = new THREE.MeshStandardMaterial({
           color: crowdColors[(k + tier + Math.abs(s)) % crowdColors.length],
@@ -651,7 +666,7 @@ export function initRaceScene(
   bctx.font = 'bold 58px sans-serif';
   bctx.textAlign = 'center';
   bctx.textBaseline = 'middle';
-  bctx.fillText(isIce ? 'ፍኒሽ · FINISH' : 'ፍኒሽ · FINISH', 256, 52);
+  bctx.fillText('ፍኒሽ · FINISH', 256, 52);
   const bannerTex = new THREE.CanvasTexture(bannerCanvas);
   bannerTex.colorSpace = THREE.SRGBColorSpace;
   const banner = new THREE.Mesh(
@@ -661,7 +676,7 @@ export function initRaceScene(
   banner.position.set(0, 7.4, RZ);
   scene.add(banner);
 
-  addGrandstands(scene, isIce ? 10 : 10, isIce);
+  addGrandstands(scene, 10, isIce);
   addFloodlights(scene, isIce ? 6 : 4);
 
   // ---------- racers ----------
@@ -694,7 +709,7 @@ export function initRaceScene(
     loadCallbacks = [];
   }
 
-  function addRacerRoot(r: Racer, i: number, model: THREE.Object3D): { root: THREE.Group; rig: THREE.Group } {
+  function addRacerRoot(_r: Racer, i: number, model: THREE.Object3D): { root: THREE.Group; rig: THREE.Group } {
     const root = new THREE.Group();
     const rig = new THREE.Group();
     root.add(rig);
@@ -718,7 +733,8 @@ export function initRaceScene(
     template.position.x -= center.x;
     template.position.z -= center.z;
     template.position.y -= box2.min.y;
-    template.rotation.y = Math.PI;
+    // Face forward along the track direction (-Z in local space matches atan2(-p.tx, -p.tz))
+    template.rotation.y = 0;
 
     const clips = gltf.animations ?? [];
     const bibSize = Math.max(0.36, h * 0.24);
@@ -735,7 +751,6 @@ export function initRaceScene(
         }
       });
 
-      // number bibs on jockey chest and back (facing camera clearly)
       const bibF = new THREE.Mesh(
         new THREE.PlaneGeometry(bibSize, bibSize),
         new THREE.MeshStandardMaterial({
@@ -763,7 +778,7 @@ export function initRaceScene(
       if (clips.length > 0) {
         const mixer = new THREE.AnimationMixer(clone);
         const action = mixer.clipAction(clips[0]);
-        action.timeScale = 1.35;
+        action.timeScale = 1.6;
         action.play();
         mixers.push(mixer);
       }
@@ -840,7 +855,6 @@ export function initRaceScene(
       }
     );
   } else {
-    // Freeze Run: articulated human sprinters, ready immediately
     RACERS.forEach((r, i) => {
       const { root, parts } = buildRunner(r, i);
       runnerRigs[i] = parts;
@@ -932,7 +946,7 @@ export function initRaceScene(
 
     runnerRigs.forEach((parts, i) => {
       if (!parts) return;
-      if (racing) poseRunnerSprint(parts, t * 12 + i * 2.1);
+      if (racing) poseRunnerSprint(parts, t * 14 + i * 2.1);
       else poseRunnerIdle(parts);
     });
 
@@ -943,8 +957,8 @@ export function initRaceScene(
       } else {
         const rig = root.children[0];
         if (rig?.userData.horse) {
-          rig.position.y = racing ? Math.abs(Math.sin(t * 9 + i * 1.9)) * 0.12 : 0;
-          rig.rotation.z = racing ? Math.sin(t * 9 + i * 1.9) * 0.04 : 0;
+          rig.position.y = racing ? Math.abs(Math.sin(t * 12 + i * 1.9)) * 0.18 : 0;
+          rig.rotation.z = racing ? Math.sin(t * 12 + i * 1.9) * 0.06 : 0;
         }
       }
       if (racing && i % 2 === 0) {
