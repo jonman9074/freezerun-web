@@ -1,168 +1,290 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Snowflake,
   Wallet,
-  UserCircle,
-  ChevronDown,
-  User,
-  PlusCircle,
-  Banknote,
-  Receipt,
-  ScrollText,
-  ShieldCheck,
   LogOut,
-  Loader2,
+  User as UserIcon,
+  Shield,
+  ChevronDown,
+  History,
+  AlertTriangle,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { Modal } from '@/components/Modal';
-import { Field, Button } from '@/components/ui';
-import ProfileModal from '@/components/ProfileModal';
-import AddBalanceModal from '@/components/AddBalanceModal';
-import ClaimModal from '@/components/ClaimModal';
-import TransactionsModal from '@/components/TransactionsModal';
-import RulesModal from '@/components/RulesModal';
+import { WalletModal } from '@/components/WalletModal';
+import { TransactionsModal } from '@/components/TransactionsModal';
 
-type Panel = 'profile' | 'balance' | 'claim' | 'transactions' | 'rules' | null;
+export const MIN_WITHDRAWAL_ETB = 600;
 
-export default function TopBar({
-  onAdminDashboard,
-  isAdminDashboard = false,
-}: {
+type MenuTab = 'profile' | 'balance' | 'admin' | 'transactions' | 'rules' | null;
+
+interface TopBarProps {
   onAdminDashboard?: () => void;
   isAdminDashboard?: boolean;
-}) {
-  const { profile, user } = useAuth();
+}
+
+export default function TopBar({ onAdminDashboard, isAdminDashboard }: TopBarProps) {
+  const { profile, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [panel, setPanel] = useState<Panel>(null);
+  const [activeTab, setActiveTab] = useState<MenuTab>(null);
+  const [walletModal, setWalletModal] = useState<'deposit' | 'withdraw' | null>(null);
+  const [withdrawNotice, setWithdrawNotice] = useState<string | null>(null);
+  const [txModalOpen, setTxModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function onClick(e: MouseEvent) {
+    function handleOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
     }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  const items: { key: Panel; icon: typeof User; label: string; sub: string }[] = [
-    { key: 'profile', icon: User, label: 'መገለጫ እና የይለፍ ቃል', sub: 'Profile & Password' },
-    { key: 'balance', icon: PlusCircle, label: 'ገንዘብ ለማስገባት', sub: 'Add Balance' },
-    { key: 'claim', icon: Banknote, label: 'ገንዘብ ለማስወጣት', sub: 'Claim' },
-    { key: 'transactions', icon: Receipt, label: 'ግብይቶች', sub: 'Transactions' },
-    { key: 'rules', icon: ScrollText, label: 'ህጎች እና ፲፠+', sub: 'Rules & 18+' },
+  if (!profile) return null;
+
+  const balanceNum = Number(profile.balance ?? 0);
+  const canWithdraw = balanceNum >= MIN_WITHDRAWAL_ETB;
+
+  const handleWithdrawClick = () => {
+    setMenuOpen(false);
+    if (!canWithdraw) {
+      const remaining = Math.max(0, MIN_WITHDRAWAL_ETB - balanceNum).toFixed(2);
+      setWithdrawNotice(
+        `ገንዘብ ማውጣት የሚቻለው ቢያንስ ${MIN_WITHDRAWAL_ETB} ETB ሲደርሱ ብቻ ነው። የአሁኑ ባላንስዎ ${balanceNum.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} ETB ነው (ተጨማሪ ${remaining} ETB ያስፈልጋል)።`
+      );
+      return;
+    }
+    setWithdrawNotice(null);
+    setWalletModal('withdraw');
+  };
+
+  const menuItems: { key: MenuTab; label: string; sub: string; show: boolean }[] = [
+    { key: 'profile', label: 'መገለጫ እና አድራሻ', sub: 'Profile & Address', show: true },
+    { key: 'balance', label: 'የሂሳብ ሚዛን', sub: 'Wallet Balance', show: true },
+    { key: 'admin', label: 'የአስተዳዳሪ ዳሽቦርድ', sub: 'Admin Panel', show: profile.role === 'admin' },
+    { key: 'transactions', label: 'ግብይቶች', sub: 'Transactions', show: true },
+    { key: 'rules', label: 'ህጎች እና መመሪያ', sub: 'Rules & Help', show: true },
   ];
+
   return (
     <>
-      <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-lg border-b border-white/10">
+      <header className="sticky top-0 z-40 border-b border-slate-800/90 bg-slate-950/95 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+          {/* Brand Logo */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-sky-600 flex items-center justify-center shrink-0">
-              <Snowflake size={20} className="text-white" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-slate-950 shadow-md shadow-cyan-500/20 shrink-0">
+              <Snowflake className="w-5 h-5" />
             </div>
-            <span className="font-extrabold text-white text-lg tracking-tight truncate">
-              Freeze<span className="text-cyan-400">Run</span>
+            <span className="font-extrabold text-base sm:text-lg text-white tracking-tight truncate">
+              FreezeRun
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5" ref={menuRef}>
-            <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-400/30 pl-3 pr-4 py-1.5">
-              <Wallet size={16} className="text-emerald-400" />
-              <span className="text-emerald-300 font-bold tabular-nums">
-                {(profile?.balance_etb ?? 0).toLocaleString('en-US', {
+          {/* Right Controls: Balance + Menu */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setWithdrawNotice(null);
+                setWalletModal('deposit');
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 px-3 py-1.5 text-xs sm:text-sm font-bold text-cyan-300 transition cursor-pointer"
+            >
+              <Wallet className="w-4 h-4 text-cyan-400" />
+              <span>
+                {balanceNum.toLocaleString('en-US', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })}
+                })}{' '}
+                ETB
               </span>
-              <span className="text-emerald-400/80 text-xs font-semibold">ETB</span>
-            </div>
+            </button>
 
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 pl-1.5 pr-3 py-1.5 hover:bg-white/10 transition-colors"
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1.5 text-xs font-bold text-white transition cursor-pointer"
               >
-                <span className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-sky-600 flex items-center justify-center text-white text-xs font-bold">
-                  {(profile?.phone ?? 'U').slice(-2)}
+                <span className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-extrabold">
+                  {(profile.full_name || 'U').slice(0, 2).toUpperCase()}
                 </span>
-                <span className="hidden sm:block text-sm text-slate-200 max-w-[120px] truncate">
-                  {profile?.full_name || user?.email?.split('@')[0]?.replace(/\D/g, '') || 'User'}
-                </span>
-                <ChevronDown
-                  size={16}
-                  className={`text-slate-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
-                />
+                <ChevronDown className="w-4 h-4 text-slate-400" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl shadow-black/50 overflow-hidden animate-pop-in origin-top-right">
-                  <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
-                    <UserCircle size={36} className="text-cyan-400" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">
-                        {profile?.full_name || 'Player'}
-                      </p>
-                      <p className="text-xs text-slate-400 truncate">{profile?.phone}</p>
-                    </div>
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50">
+                  <div className="px-3 py-2 border-b border-slate-800 mb-1">
+                    <p className="text-sm font-bold text-white truncate">
+                      {profile.full_name || 'ተጫዋች'}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">{profile.phone || profile.role}</p>
                   </div>
-                  {onAdminDashboard && (
+
+                  {menuItems
+                    .filter((item) => item.show)
+                    .map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          if (item.key === 'admin' && onAdminDashboard) {
+                            onAdminDashboard();
+                          } else if (item.key === 'transactions') {
+                            setTxModalOpen(true);
+                          } else {
+                            setActiveTab(item.key);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800/90 transition flex items-center justify-between cursor-pointer"
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-slate-100">{item.label}</div>
+                          <div className="text-[11px] text-slate-400">{item.sub}</div>
+                        </div>
+                        {item.key === 'admin' && <Shield className="w-4 h-4 text-amber-400" />}
+                        {item.key === 'transactions' && <History className="w-4 h-4 text-cyan-400" />}
+                        {item.key === 'profile' && <UserIcon className="w-4 h-4 text-slate-400" />}
+                      </button>
+                    ))}
+
+                  {/* Withdraw action strictly enforced at >= 600 ETB */}
+                  <div className="mt-1 pt-1 border-t border-slate-800">
                     <button
+                      type="button"
+                      onClick={handleWithdrawClick}
+                      className={`w-full text-left px-3 py-2 rounded-xl transition flex items-center justify-between cursor-pointer ${
+                        canWithdraw
+                          ? 'hover:bg-emerald-500/15 text-emerald-300'
+                          : 'bg-slate-800/50 text-slate-400'
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold">
+                          ገንዘብ አውጣ · Withdraw
+                        </div>
+                        <div className="text-[11px]">
+                          {canWithdraw
+                            ? 'ዝግጁ ነው (ቢያንስ 600 ETB)'
+                            : `ቢያንስ ${MIN_WITHDRAWAL_ETB} ETB ያስፈልጋል`}
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="mt-1 pt-1 border-t border-slate-800">
+                    <button
+                      type="button"
                       onClick={() => {
                         setMenuOpen(false);
-                        onAdminDashboard();
+                        signOut();
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-500/10 transition-colors text-left border-b border-white/5"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-500/15 text-rose-400 text-xs font-bold flex items-center gap-2 transition cursor-pointer"
                     >
-                      <ShieldCheck size={18} className="text-amber-400 shrink-0" />
-                      <span>
-                        <span className="block text-sm text-amber-300">የአስተዳደር ዳሽቦርድ</span>
-                        <span className="block text-xs text-slate-400">Admin Dashboard</span>
-                      </span>
+                      <LogOut className="w-4 h-4" />
+                      <span>ውጣ · Sign Out</span>
                     </button>
-                  )}
-                  {items.map(({ key, icon: Icon, label, sub }) => (
-                    <button
-                      key={sub}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setPanel(key);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
-                    >
-                      <Icon size={18} className="text-cyan-400 shrink-0" />
-                      <span className="min-w-0">
-                        <span className="block text-sm text-white">{label}</span>
-                        <span className="block text-xs text-slate-400">{sub}</span>
-                      </span>
-                    </button>
-                  ))}
-                  <button
-                    onClick={async () => {
-                      setMenuOpen(false);
-                      await supabase.auth.signOut();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-rose-500/10 transition-colors text-left border-t border-white/10"
-                  >
-                    <LogOut size={18} className="text-rose-400 shrink-0" />
-                    <span>
-                      <span className="block text-sm text-rose-300">ውጣ</span>
-                      <span className="block text-xs text-slate-400">Log Out</span>
-                    </span>
-                  </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* Notice banner when balance is under 600 ETB */}
+        {withdrawNotice && (
+          <div className="bg-amber-500/15 border-t border-amber-400/30 px-4 py-2.5 text-amber-200 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{withdrawNotice}</span>
+              <button
+                type="button"
+                onClick={() => setWithdrawNotice(null)}
+                className="ml-auto text-amber-300 underline font-bold cursor-pointer"
+              >
+                ዝጋ
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
-      <ProfileModal open={panel === 'profile'} onClose={() => setPanel(null)} />
-      <AddBalanceModal open={panel === 'balance'} onClose={() => setPanel(null)} />
-      <ClaimModal open={panel === 'claim'} onClose={() => setPanel(null)} />
-      <TransactionsModal open={panel === 'transactions'} onClose={() => setPanel(null)} />
-      <RulesModal open={panel === 'rules'} onClose={() => setPanel(null)} />
+      {/* Info Modal for Profile / Balance / Rules */}
+      {activeTab && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 text-white shadow-2xl">
+            <h3 className="text-lg font-extrabold mb-3">
+              {activeTab === 'profile' && 'መገለጫ · Profile'}
+              {activeTab === 'balance' && 'የሂሳብ ሚዛን · Balance'}
+              {activeTab === 'rules' && 'ህጎች እና የገንዘብ ማውጣት መመሪያ'}
+            </h3>
+
+            {activeTab === 'profile' && (
+              <div className="space-y-2 text-sm text-slate-300">
+                <p><span className="text-slate-400">ስም：</span> {profile.full_name || '-'}</p>
+                <p><span className="text-slate-400">ስልክ：</span> {profile.phone || '-'}</p>
+                <p><span className="text-slate-400">ደረጃ：</span> {profile.role}</p>
+              </div>
+            )}
+
+            {activeTab === 'balance' && (
+              <div className="space-y-3 text-sm text-slate-300">
+                <p className="text-2xl font-black text-cyan-300">
+                  {balanceNum.toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB
+                </p>
+                <p className="text-xs text-slate-400">
+                  ገንዘብ ማውጣት የሚቻለው ባላንስዎ ቢያንስ {MIN_WITHDRAWAL_ETB} ETB ሲደርስ ብቻ ነው።
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(null);
+                    handleWithdrawClick();
+                  }}
+                  className="w-full rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold py-2.5 text-xs transition cursor-pointer"
+                >
+                  ገንዘብ ለማውጣት ሞክር (ቢያንስ 600 ETB)
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'rules' && (
+              <ul className="space-y-2 text-xs text-slate-300 list-disc pl-5 leading-relaxed">
+                <li>1v1 ፍሪዝ ዱኤል፡ 1ኛ ተጫዋች በገንዘቡ ይገባል፣ 2ኛ ተጫዋች ሲገባ ውድድሩ ይጀምራል።</li>
+                <li>መጀመሪያ ቀላል ሆኖ ወደ ፊት እየሄዱ ሲሄዱ ፍጥነትና መሰናክሎች እየከበዱ ይሄዳሉ።</li>
+                <li>ሳይወድቁ ቀድመው ያለፉ የውድድሩን ገንዘብ ያሸንፋሉ።</li>
+                <li>ገንዘብ ማውጣት የሚቻለው ቢያንስ {MIN_WITHDRAWAL_ETB} ETB ሲደርሱ ብቻ ነው።</li>
+              </ul>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab(null)}
+                className="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-bold text-white cursor-pointer"
+              >
+                ዝጋ · Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {walletModal && (
+        <WalletModal
+          mode={walletModal === 'withdraw' && !canWithdraw ? 'deposit' : walletModal}
+          onClose={() => setWalletModal(null)}
+        />
+      )}
+
+      {txModalOpen && (
+        <TransactionsModal onClose={() => setTxModalOpen(false)} />
+      )}
     </>
   );
 }
